@@ -20,30 +20,51 @@ if (photoInput){
 
 if (scanButton) {
 
-    scanButton.addEventListener("click", () => {
+    scanButton.addEventListener("click", async() => {
         const file = photoInput.files[0];
+
+
+
+        const formData = new FormData();
+        formData.append("photo", file);
+
+        fetch("http://127.0.0.1:8000/scan", {
+            method: "POST",
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data);
+            });
+
+        console.log("OCR started");
+
+        const text = await getOCRText(file);
+
+        console.log("OCR finished");
+        console.log(text);
+
         const fileName = file.name.split('.')[0];
 
+        // const ocrText = `
+        // MILK 3.2%
+        // 1L
+        // PACKED: 03.09.2026
+        // USE BY: 15.11.2026
+        // STORE AT +2°C
+        // `;
 
-        const ocrText = `
-        MILK 3.2% 
-        1L
-        PACKED: 03.09.2026
-        USE BY: 15.11.2026
-        STORE AT +2°C
-        `;
-
-        const expirationDate = extractExpirationDate(ocrText);
+        const expirationDate = extractExpirationDate(text);
 
         if (!expirationDate) {
             alert("Expiration date not found");
             return;
         }
 
-        const scanResult = createScanResult(fileName, expirationDate);
+        const scanResult = createScanResult("Unknown product", expirationDate);
 
         localStorage.setItem("scanResult", JSON.stringify(scanResult));
-        window.location.href = "result.html";
+        // window.location.href = "result.html";
     });
 }
 
@@ -56,8 +77,77 @@ function createScanResult(productName="Unknown product", expirationDate) {
 }
 
 
+function prepareImage(file) {
+    return new Promise((resolve) => {
+        const image = new Image();
+
+        image.onload = () => {
+            const scale = 3;
+
+            const canvas = document.createElement("canvas");
+            canvas.width = image.width * scale;
+            canvas.height = image.height * scale;
+
+            const ctx = canvas.getContext("2d");
+
+            ctx.drawImage(
+                image,
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+
+            const imageData = ctx.getImageData(
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                imageData.data[i] =
+                    Math.min(255, imageData.data[i] * 1.3);
+
+                imageData.data[i + 1] =
+                    Math.min(255, imageData.data[i + 1] * 1.3);
+
+                imageData.data[i + 2] =
+                    Math.min(255, imageData.data[i + 2] * 1.3);
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+
+            resolve(canvas);
+        };
+
+        image.src = URL.createObjectURL(file);
+    });
+}
+
+
+
+async function getOCRText (file) {
+
+    const image = await prepareImage(file);
+
+    console.log("Image size:", image.width, "x", image.height);
+
+    const result = await Tesseract.recognize(
+        image,
+        "eng"
+    );
+
+    return result.data.text;
+
+
+
+
+}
+
+
 function extractExpirationDate(text) {
-    const dates = text.match(/\d{1,2}[/.]\d{1,2}[./]\d{2,4}/g);
+    const dates = text.match(/\d{1,2}[/.-]\d{1,2}[-./]\d{2,4}/g);
     const isoDate = text.match(/\d{4}-\d{2}-\d{2}/);
 
     if (!dates && isoDate) {
@@ -69,7 +159,7 @@ function extractExpirationDate(text) {
     }
 
     dates.forEach((date, index) => {
-        let [day, month, year] = date.split(/[./]/);
+        let [day, month, year] = date.split(/[./-]/);
         if (year.length === 2) {
             year = `20${year}`;
     }
@@ -78,10 +168,10 @@ function extractExpirationDate(text) {
 
 
     dates.sort((a, b) => {
-        return new Date(b.split(/[./]/).reverse().join("-")) - new Date(a.split(/[./]/).reverse().join("-"));
+        return new Date(b.split(/[./-]/).reverse().join("-")) - new Date(a.split(/[./-]/).reverse().join("-"));
     })
 
-    let [day, month, year] = dates[0].split(/[./]/);
+    let [day, month, year] = dates[0].split(/[./-]/);
 
 
     const formatDate = `${year}-${month}-${day}`;
@@ -246,3 +336,20 @@ if (foodListContainer) {
     }
     
 }
+
+fetch("http://127.0.0.1:8000/food", {
+    method: "POST",
+    headers: {
+        "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+        name: "Milk"
+    })
+})
+    .then(response => response.json())
+    .then(data => {
+        console.log(data);
+    })
+    .catch(error => {
+        console.error(error);
+    });
