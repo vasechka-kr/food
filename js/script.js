@@ -34,7 +34,8 @@ if (scanButton) {
         })
             .then(response => response.json())
             .then(data => {
-                console.log(data);
+                console.log("OCR:  ");
+                console.log(data.text);
             });
 
         console.log("OCR started");
@@ -45,14 +46,6 @@ if (scanButton) {
         console.log(text);
 
         const fileName = file.name.split('.')[0];
-
-        // const ocrText = `
-        // MILK 3.2%
-        // 1L
-        // PACKED: 03.09.2026
-        // USE BY: 15.11.2026
-        // STORE AT +2°C
-        // `;
 
         const expirationDate = extractExpirationDate(text);
 
