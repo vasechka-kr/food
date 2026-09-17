@@ -3,6 +3,7 @@
 
 const photoInput = document.getElementById("food-photo");
 const preview = document.getElementById("preview-food");
+const scanMessage = document.getElementById("scan-message");
 
 const scanButton = document.getElementById("scan-button");
 
@@ -21,44 +22,79 @@ if (photoInput){
 if (scanButton) {
 
     scanButton.addEventListener("click", async() => {
+        scanButton.disabled = true;
+        scanButton.textContent = "Scanning...";
         const file = photoInput.files[0];
-
 
 
         const formData = new FormData();
         formData.append("photo", file);
 
-        fetch("http://127.0.0.1:8000/scan", {
-            method: "POST",
-            body: formData
-        })
-            .then(response => response.json())
-            .then(data => {
-                console.log("OCR:  ");
-                console.log(data.text);
+        try {
+            const response = await fetch("http://127.0.0.1:8000/scan", {
+                    method: "POST",
+                    body: formData
             });
 
-        console.log("OCR started");
+            if (!response.ok) {
+                throw new Error("Backend request failed");
+            }
 
-        const text = await getOCRText(file);
+            const data = await response.json();
+            const previousScan = localStorage.getItem("partialScan");
 
-        console.log("OCR finished");
-        console.log(text);
+            let savedScan = null;
 
-        const fileName = file.name.split('.')[0];
+            if (previousScan) {
+                scanMessage.textContent = "Some information is still missing. Please take another photo.";
+                savedScan = JSON.parse(previousScan);
+            }
 
-        const expirationDate = extractExpirationDate(text);
+            if (savedScan) {
+                if (savedScan.name === "NOT_FOUND") {
+                    savedScan.name = data.name;
+                }
 
-        if (!expirationDate) {
-            alert("Expiration date not found");
-            return;
+                if (savedScan.expirationDate === "NOT_FOUND") {
+                    savedScan.expirationDate = data.expirationDate;
+                }
+    }
+
+            console.log("Backend result:", data);
+
+            const result = savedScan || data;
+
+           if (result.name === "NOT_FOUND" || result.expirationDate === "NOT_FOUND") {
+
+               localStorage.setItem("partialScan", JSON.stringify(result));
+                scanMessage.textContent = ("Some information could not be found. Please take another photo.");
+                scanButton.textContent = "Scan";
+                scanButton.disabled = true;
+                return;
+            }
+            else {
+                scanButton.disabled = false;
+            }
+
+            localStorage.removeItem("partialScan");
+            scanMessage.textContent = "";
+
+            const scanResult = createScanResult(
+                result.name,
+                result.expirationDate
+            );
+
+            localStorage.setItem("scanResult", JSON.stringify(scanResult));
+            window.location.href = "result.html";
+
+        } catch (error) {
+            console.error("Scan error:", error);
+            scanMessage.textContent = "Something went wrong. Please try again.";
+            scanButton.disabled = false;
+            scanButton.textContent = "Scan";
         }
+        });
 
-        const scanResult = createScanResult("Unknown product", expirationDate);
-
-        localStorage.setItem("scanResult", JSON.stringify(scanResult));
-        // window.location.href = "result.html";
-    });
 }
 
 
@@ -68,116 +104,6 @@ function createScanResult(productName="Unknown product", expirationDate) {
         expirationDate: expirationDate
     };
 }
-
-
-function prepareImage(file) {
-    return new Promise((resolve) => {
-        const image = new Image();
-
-        image.onload = () => {
-            const scale = 3;
-
-            const canvas = document.createElement("canvas");
-            canvas.width = image.width * scale;
-            canvas.height = image.height * scale;
-
-            const ctx = canvas.getContext("2d");
-
-            ctx.drawImage(
-                image,
-                0,
-                0,
-                canvas.width,
-                canvas.height
-            );
-
-            const imageData = ctx.getImageData(
-                0,
-                0,
-                canvas.width,
-                canvas.height
-            );
-
-            for (let i = 0; i < imageData.data.length; i += 4) {
-                imageData.data[i] =
-                    Math.min(255, imageData.data[i] * 1.3);
-
-                imageData.data[i + 1] =
-                    Math.min(255, imageData.data[i + 1] * 1.3);
-
-                imageData.data[i + 2] =
-                    Math.min(255, imageData.data[i + 2] * 1.3);
-            }
-
-            ctx.putImageData(imageData, 0, 0);
-
-            resolve(canvas);
-        };
-
-        image.src = URL.createObjectURL(file);
-    });
-}
-
-
-
-async function getOCRText (file) {
-
-    const image = await prepareImage(file);
-
-    console.log("Image size:", image.width, "x", image.height);
-
-    const result = await Tesseract.recognize(
-        image,
-        "eng"
-    );
-
-    return result.data.text;
-
-
-
-
-}
-
-
-function extractExpirationDate(text) {
-    const dates = text.match(/\d{1,2}[/.-]\d{1,2}[-./]\d{2,4}/g);
-    const isoDate = text.match(/\d{4}-\d{2}-\d{2}/);
-
-    if (!dates && isoDate) {
-        return isoDate[0]
-    }
-
-    if (!dates) {
-        return null;
-    }
-
-    dates.forEach((date, index) => {
-        let [day, month, year] = date.split(/[./-]/);
-        if (year.length === 2) {
-            year = `20${year}`;
-    }
-        dates[index] = `${day}.${month}.${year}`;
-    })
-
-
-    dates.sort((a, b) => {
-        return new Date(b.split(/[./-]/).reverse().join("-")) - new Date(a.split(/[./-]/).reverse().join("-"));
-    })
-
-    let [day, month, year] = dates[0].split(/[./-]/);
-
-
-    const formatDate = `${year}-${month}-${day}`;
-    // const testDate = new Date(formatDate);
-    // if (isNaN(testDate)) {
-    //     return null
-    // }
-
-    return formatDate;
-}
-
-
-
 
 function getStatus(expirationDate) {
     const today = new Date();
@@ -264,8 +190,6 @@ if (readAloudButton) {
 
 
 
-
-
                                     /* My Food List page */
 
 const foodListContainer = document.getElementById("food-list-container");
@@ -329,20 +253,3 @@ if (foodListContainer) {
     }
     
 }
-
-fetch("http://127.0.0.1:8000/food", {
-    method: "POST",
-    headers: {
-        "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-        name: "Milk"
-    })
-})
-    .then(response => response.json())
-    .then(data => {
-        console.log(data);
-    })
-    .catch(error => {
-        console.error(error);
-    });

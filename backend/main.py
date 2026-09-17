@@ -1,28 +1,51 @@
-from fastapi import FastAPI, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import pytesseract
-from PIL import Image
-from dotenv import load_dotenv
 import os
+import base64
+import json
+import io
+import httpx
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image, ImageOps
+from dotenv import load_dotenv
 from openai import OpenAI
-
-load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
-
-print("Key loaded:", api_key is not None)
-print("Key length:", len(api_key))
-print("ASCII:", api_key.isascii())
-client = OpenAI(api_key=api_key)
-
-response = client.responses.create(
-    model="gpt-5.5",
-    input="Say hello to FreshFood in one short sentence."
+from openai.types.chat import (
+    ChatCompletionUserMessageParam,
+    ChatCompletionContentPartTextParam,
+    ChatCompletionContentPartImageParam
 )
 
-print(response.output_text)
 
 
+load_dotenv()
+api_key = os.getenv("OPENROUTER_API_KEY")
+
+proxy_address = os.getenv("WEBSHARE_PROXY_ADDRESS")
+proxy_port = os.getenv("WEBSHARE_PROXY_PORT")
+proxy_username = os.getenv("WEBSHARE_PROXY_USERNAME")
+proxy_password = os.getenv("WEBSHARE_PROXY_PASSWORD")
+
+
+if all([proxy_address, proxy_port, proxy_username, proxy_password]):
+
+    proxy = (
+        f"http://{proxy_username}:{proxy_password}"
+        f"@{proxy_address}:{proxy_port}"
+    )
+
+    http_client = httpx.Client(
+        proxy=proxy
+    )
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://openrouter.ai/api/v1",
+        http_client=http_client
+    )
+
+else:
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://openrouter.ai/api/v1"
+    )
 
 
 app = FastAPI()
@@ -35,38 +58,103 @@ app.add_middleware(
 )
 
 
-class Food(BaseModel):
-    name: str
-
-
-@app.get("/")
-def home():
-    return {
-        "name": "Milk",
-        "expirationDate": "2025-06-11"
-    }
-
-
-@app.post("/food")
-def receive_food(food: Food):
-    print(food)
-    return {
-        "message": "I received the food!",
-        "name": food.name
-    }
-
 @app.post("/scan")
 async def scan_food(photo: UploadFile = File(...)):
     contents = await photo.read()
 
-    with open("uploaded_food.jpg", "wb") as file:
-        file.write(contents)
+    image = Image.open(io.BytesIO(contents))
+    image = ImageOps.exif_transpose(image)
+    image = image.convert("RGB")
 
-    text = pytesseract.image_to_string(Image.open("uploaded_food.jpg"))
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG")
+    image_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-    print(photo.filename)
-    print("Image saved successfully!")
-    print("File size:", len(contents), "bytes")
-    print(f"OCR result: {text}")
-    return {"message": "Photo saved!",
-            "text": text}
+
+    text_part: ChatCompletionContentPartTextParam = {
+        "type": "text",
+        "text": """
+    Here is a photo of a food package.
+
+    Find the product name and expiration date.
+
+    Rules:
+    - Dates use DD.MM.YYYY unless written as YYYY-MM-DD.
+    - Carefully inspect the ORIGINAL IMAGE before determining the expiration date.
+    - Expiration dates may use different formats, including:
+      - DD.MM.YYYY
+      - DD/MM/YYYY
+      - DD-MM-YYYY
+      - DD MM YYYY
+      - MM.DD.YYYY
+      - MM/DD/YYYY
+      - MM-DD-YYYY
+      - YYYY.MM.DD
+      - YYYY/MM/DD
+      - YYYY-MM-DD
+      
+    - The date may also contain spaces instead of separators.
+    - Determine the order of day, month, and year from the format and context on the package.
+    - For example:
+      - 13.10.2026 → 2026-10-13
+      - 13/10/2026 → 2026-10-13
+      - 13-10-2026 → 2026-10-13
+      - 13 10 2026 → 2026-10-13
+      - 10/13/2026 → 2026-10-13
+      - 2026-10-13 → 2026-10-13
+    - Do not invent or guess a date.
+    
+    - If a date could have more than one interpretation, use other information on the package to determine the format.
+    - Prefer the date labeled EXP, EXPIRY, BEST BEFORE, or an equivalent expiration label.
+    - Do not choose MFG, MANUFACTURED, or production dates.
+    
+    
+    - Return the result as JSON in exactly this format:
+        {{"name":"product name or NOT_FOUND","expirationDate":"YYYY-MM-DD or NOT_FOUND"}}
+    - If you cannot identify the product name, use "NOT_FOUND" for the name.
+    - If you cannot identify a clear expiration date, use "NOT_FOUND" for the expirationDate.
+        
+    """
+    }
+
+    image_part: ChatCompletionContentPartImageParam = {
+        "type": "image_url",
+        "image_url": {
+            "url": f"data:image/jpeg;base64,{image_base64}"
+        }
+    }
+
+    message: ChatCompletionUserMessageParam = {
+        "role": "user",
+        "content": [text_part, image_part]
+    }
+
+    try:
+        response = client.chat.completions.create(
+            model="nex-agi/nex-n2.5-pro:free", # Ling 3.0 Flash VL
+            messages=[message]
+        )
+    except Exception as error:
+        print("OpenRouter error:", error)
+        raise HTTPException(
+            status_code=502,
+            detail="Could not connect to the AI service."
+        )
+
+
+    try:
+        ai_result = response.choices[0].message.content.strip()
+        ai_result = json.loads(ai_result)
+    except (AttributeError, json.JSONDecodeError, TypeError) as error:
+        print("AI response error:", error)
+        raise HTTPException(
+            status_code=502,
+            detail="The AI returned an invalid response."
+        )
+    print(f"AI Result: {ai_result}")
+
+
+    return {
+        "message": "Photo scanned!",
+        "name": ai_result["name"],
+        "expirationDate": ai_result["expirationDate"]}
