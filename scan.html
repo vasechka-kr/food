@@ -11,7 +11,12 @@
 </head>
 <body>
 <header>
-  <h1>Scan Food</h1>
+    <h1>Scan Food</h1>
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="scan.html">Scan Food</a>
+        <a href="my-food.html">My Food</a>
+    </nav>
 </header>
 
 <main>
@@ -23,10 +28,10 @@
     <label for="food-photo">Take Photo</label>
     <input id="food-photo" type="file" accept="image/*" capture="environment"/>
 
-    <img alt="" id="preview-food"/>
+    <img alt="Preview of the selected product" id="preview-food"/>
 
-    <button type="button" id="scan-button" disabled>Scan Food</button>
-    <p id="scan-message"></p>
+    <button type="button" id="scan-button" disabled aria-live="polite">Scan Food</button>
+    <p id="scan-message" aria-live="polite"></p>
 </main>
 
 </body>

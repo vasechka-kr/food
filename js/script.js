@@ -30,8 +30,12 @@ if (scanButton) {
         const formData = new FormData();
         formData.append("photo", file);
 
+        const API_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+            ? "http://127.0.0.1:8000/scan"
+            : "/api/scan";
+
         try {
-            const response = await fetch("http://127.0.0.1:8000/scan", {
+            const response = await fetch(API_URL, {
                     method: "POST",
                     body: formData
             });
@@ -173,13 +177,16 @@ if (addFoodButton) {
 
         localStorage.setItem("food", JSON.stringify(foodList));  // update "food" in localStorage with foodlist
 
+        addFoodButton.textContent = "✅ Added to My Food";
+        addFoodButton.disabled = true;
+
         alert(`${food.name} was added to My Food List!`);
     });
 }
 
 if (readAloudButton) {
     readAloudButton.addEventListener("click", () => {
-        const text = `${food.name}. Expiration date: ${resultDate.textContent}. Status: ${resultStatus.textContent}`;
+        const text = `${food.name}. Expiration date: ${resultDate.textContent}. Status: ${resultStatus.textContent.replace("🔴 ", "").replace("🟡 ", "").replace("🟢 ", "")}`;
 
         const speech = new SpeechSynthesisUtterance(text);
 
@@ -193,6 +200,7 @@ if (readAloudButton) {
                                     /* My Food List page */
 
 const foodListContainer = document.getElementById("food-list-container");
+const manualFoodForm = document.getElementById("manual-food-form");
 
 
 if (foodListContainer) {
@@ -202,7 +210,20 @@ if (foodListContainer) {
     if (savedFood) {
         const foodList = JSON.parse(savedFood);
 
+        const today = new Date();
+
         foodList.sort((a, b) => {
+
+            const aExpired = new Date(a.expirationDate) < today;
+            const bExpired = new Date(b.expirationDate) < today;
+
+            if (aExpired && !bExpired) {
+                return 1;
+            }
+
+            if (!aExpired && bExpired) {
+                return -1;
+            }
             return new Date(a.expirationDate) - new Date(b.expirationDate);
         });
 
@@ -251,5 +272,37 @@ if (foodListContainer) {
         foodListContainer.textContent = "Your food list is empty. Scan a product to add it!"
 
     }
-    
+}
+
+if (manualFoodForm) {
+
+    manualFoodForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        const name = document.getElementById("manual-food-name").value;
+        const expirationDate = document.getElementById("manual-food-date").value;
+
+        const food = {
+            name: name,
+            expirationDate: expirationDate,
+            id: Date.now()
+        };
+
+        const savedFood = localStorage.getItem("food");
+        let foodList = [];
+
+        if (savedFood) {
+            foodList = JSON.parse(savedFood);
+        }
+
+        foodList.push(food);
+        localStorage.setItem("food", JSON.stringify(foodList));
+        location.reload();
+    });
+
+
+
+
+
+
 }

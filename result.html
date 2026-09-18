@@ -10,22 +10,32 @@
 <body>
 <header>
   <h1>Scan Result</h1>
+  <nav>
+        <a href="index.html">Home</a>
+        <a href="scan.html">Scan Food</a>
+        <a href="my-food.html">My Food</a>
+    </nav>
+
 </header>
 
 <main>
   <!-- Detected product, expiration date + 2 buttons (Add to My Food and Read aloud) -->
+    <section aria-labelledby="result-heading">
+    <h2 id="result-heading">Scan Result</h2>
 
-    <h2> Product</h2>
+    <h3> Product</h3>
     <p id="result-product"></p>
 
-    <h2>Expiration Date</h2>
+    <h3>Expiration Date</h3>
     <p id="result-date"></p>
 
-    <h2>Status</h2>
+    <h3>Status</h3>
     <p id="result-status"></p>
+    </section>
 
     <button type="button" id="add-food">Add to My Food</button>
     <button type="button" id="read-aloud">Read aloud</button>
+
 </main>
 
 </body>

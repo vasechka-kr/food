@@ -37,3 +37,18 @@
 .remove-button {
     margin-top: 10px;
 }
+
+
+nav {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 10px;
+}
+nav a{
+    text-decoration: none;
+    padding: 10px 12px;
+}
+nav a:hover{
+    text-decoration: underline;
+}

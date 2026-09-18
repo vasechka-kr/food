@@ -10,11 +10,27 @@
 <body>
 <header>
     <h1>My Food</h1>
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="scan.html">Scan Food</a>
+        <a href="my-food.html">My Food</a>
+    </nav>
 </header>
 
 <main>
     <!-- The scanned food list with expiration date -->
     <div id="food-list-container"></div>
+
+    <h2 id="manual-food-heading">Add Food Manually</h2>
+    <form id="manual-food-form" aria-labelledby="manual-food-heading">
+        <label for="manual-food-name">Product name:</label>
+        <input type="text" id="manual-food-name" required>
+
+        <label for="manual-food-date">Expiration date:</label>
+        <input type="date" id="manual-food-date" required>
+
+        <button type="submit">Add food</button>
+    </form>
 </main>
 
 </body>

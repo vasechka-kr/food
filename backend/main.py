@@ -52,7 +52,9 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:63342"],
+    allow_origins=["http://localhost:63342",
+                   "https://freshfood-ai-red.vercel.app"
+                   ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
