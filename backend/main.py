@@ -61,6 +61,7 @@ app.add_middleware(
 
 
 @app.post("/scan")
+@app.post("/api/scan")
 async def scan_food(photo: UploadFile = File(...)):
     contents = await photo.read()
 
