@@ -14,6 +14,10 @@ from openai.types.chat import (
     ChatCompletionContentPartImageParam
 )
 
+from pathlib import Path
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
 
 
 load_dotenv()
@@ -49,6 +53,8 @@ else:
 
 
 app = FastAPI()
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 app.add_middleware(
     CORSMiddleware,
@@ -161,3 +167,38 @@ async def scan_food(photo: UploadFile = File(...)):
         "message": "Photo scanned!",
         "name": ai_result["name"],
         "expirationDate": ai_result["expirationDate"]}
+
+
+# Frontend files
+
+app.mount(
+    "/css",
+    StaticFiles(directory=str(BASE_DIR / "css")),
+    name="css"
+)
+
+app.mount(
+    "/js",
+    StaticFiles(directory=str(BASE_DIR / "js")),
+    name="js"
+)
+
+
+@app.get("/", include_in_schema=False)
+async def home():
+    return FileResponse(BASE_DIR / "index.html")
+
+
+@app.get("/scan.html", include_in_schema=False)
+async def scan_page():
+    return FileResponse(BASE_DIR / "scan.html")
+
+
+@app.get("/result.html", include_in_schema=False)
+async def result_page():
+    return FileResponse(BASE_DIR / "result.html")
+
+
+@app.get("/my-food.html", include_in_schema=False)
+async def my_food_page():
+    return FileResponse(BASE_DIR / "my-food.html")
